@@ -1,18 +1,36 @@
 """Versão imperativa do Sistema de Análise de Triângulos."""
 
-from math import acos, degrees, isclose, sqrt
+from math import acos, degrees, isclose, isfinite, sqrt
 
 TOLERANCIA = 1e-9
 
 
+def validar_entrada(a, b, c):
+    """Retorna o motivo da rejeição ou None; não faz entrada/saída."""
+    for lado in (a, b, c):
+        if lado is None:
+            return "medida ausente"
+        if isinstance(lado, bool) or not isinstance(lado, (int, float)):
+            return "valor não numérico"
+        if not isfinite(lado):
+            return "valor não finito"
+    for lado in (a, b, c):
+        if lado <= 0:
+            return "lado não positivo"
+    if not (a + b > c and a + c > b and b + c > a):
+        return "as medidas não formam um triângulo"
+    return None
+
+
 def triangulo_valido(a, b, c):
     """Retorna True quando os três lados formam um triângulo."""
-    return a > 0 and b > 0 and c > 0 and a + b > c and a + c > b and b + c > a
+    return validar_entrada(a, b, c) is None
 
 
 def classificar_lados(a, b, c):
     """Classifica o triângulo como equilátero, isósceles ou escaleno."""
-    if isclose(a, b, abs_tol=TOLERANCIA) and isclose(b, c, abs_tol=TOLERANCIA):
+    if (isclose(a, b, abs_tol=TOLERANCIA) and isclose(b, c, abs_tol=TOLERANCIA)
+            and isclose(a, c, abs_tol=TOLERANCIA)):
         return "equilátero"
     if (isclose(a, b, abs_tol=TOLERANCIA) or isclose(a, c, abs_tol=TOLERANCIA)
             or isclose(b, c, abs_tol=TOLERANCIA)):
@@ -22,7 +40,14 @@ def classificar_lados(a, b, c):
 
 def classificar_angulos(a, b, c):
     """Classifica o triângulo pelo tipo de seus ângulos."""
-    menor, medio, maior = sorted((a, b, c))
+    # Trocas explícitas de valores evidenciam a atualização de estado local.
+    menor, medio, maior = a, b, c
+    if menor > medio:
+        menor, medio = medio, menor
+    if medio > maior:
+        medio, maior = maior, medio
+    if menor > medio:
+        menor, medio = medio, menor
     comparacao = menor ** 2 + medio ** 2
     quadrado_maior = maior ** 2
 
@@ -52,37 +77,30 @@ def analisar_triangulo(a, b, c):
     if not triangulo_valido(a, b, c):
         return None
 
-    return {
-        "lados": classificar_lados(a, b, c),
-        "angulos": classificar_angulos(a, b, c),
-        "perimetro": a + b + c,
-        "area": calcular_area(a, b, c),
-        "angulo_a": calcular_angulo(a, b, c),
-        "angulo_b": calcular_angulo(b, a, c),
-        "angulo_c": calcular_angulo(c, a, b),
-    }
+    resultado = {}
+    resultado["lados"] = classificar_lados(a, b, c)
+    resultado["angulos"] = classificar_angulos(a, b, c)
+    resultado["perimetro"] = a + b + c
+    resultado["area"] = calcular_area(a, b, c)
+    resultado["angulo_a"] = calcular_angulo(a, b, c)
+    resultado["angulo_b"] = calcular_angulo(b, a, c)
+    resultado["angulo_c"] = calcular_angulo(c, a, b)
+    return resultado
 
 
 def ler_lado(nome):
-    """Lê um número e repete a pergunta se a entrada não for numérica."""
-    while True:
-        try:
-            return float(input(f"Digite o lado {nome}: ").replace(",", "."))
-        except ValueError:
-            print("Digite um número válido. Exemplo: 3 ou 3,5.")
+    """Converte a entrada textual; preserva valores inválidos para validação."""
+    texto = input(f"Digite o lado {nome}: ").strip()
+    if texto == "":
+        return None
+    try:
+        return float(texto.replace(",", "."))
+    except ValueError:
+        return texto
 
 
-def main():
-    print("=== Sistema de Análise de Triângulos ===")
-    a = ler_lado("A")
-    b = ler_lado("B")
-    c = ler_lado("C")
-
-    resultado = analisar_triangulo(a, b, c)
-    if resultado is None:
-        print("\nAs medidas informadas não formam um triângulo válido.")
-        return
-
+def exibir_resultado(resultado):
+    """Apresenta os cálculos; imprimir no terminal é um efeito colateral."""
     print("\nTriângulo válido.")
     print(f"Classificação pelos lados: {resultado['lados']}")
     print(f"Classificação pelos ângulos: {resultado['angulos']}")
@@ -91,6 +109,38 @@ def main():
     print(f"Ângulo A: {resultado['angulo_a']:.2f} graus")
     print(f"Ângulo B: {resultado['angulo_b']:.2f} graus")
     print(f"Ângulo C: {resultado['angulo_c']:.2f} graus")
+
+
+def main():
+    print("=== Sistema de Análise de Triângulos ===")
+    continuar = True
+    tentativas = 0
+    validos = 0
+    # Estado da sessão: contadores e controle de repetição mudam a cada rodada.
+    while continuar:
+        try:
+            a = ler_lado("A")
+            b = ler_lado("B")
+            c = ler_lado("C")
+        except (EOFError, KeyboardInterrupt):
+            print("\nLeitura interrompida; trio incompleto não analisado.")
+            break
+        tentativas += 1
+        erro = validar_entrada(a, b, c)
+        if erro is not None:
+            print(f"Entrada rejeitada: {erro}.")
+        else:
+            resultado = analisar_triangulo(a, b, c)
+            validos += 1
+            exibir_resultado(resultado)
+        try:
+            resposta = input("Analisar outro triângulo? (s/n): ").strip().lower()
+            while resposta not in ("s", "n"):
+                resposta = input("Digite s ou n: ").strip().lower()
+            continuar = resposta == "s"
+        except (EOFError, KeyboardInterrupt):
+            continuar = False
+    print(f"\nSessão encerrada: {tentativas} tentativa(s), {validos} válida(s).")
 
 
 if __name__ == "__main__":
